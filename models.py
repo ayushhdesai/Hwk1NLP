@@ -1,9 +1,11 @@
 # models.py
 
+import random
 from sentiment_data import *
 from utils import *
-
+import numpy as np
 from collections import Counter
+import re
 
 class FeatureExtractor(object):
     """
@@ -31,7 +33,24 @@ class UnigramFeatureExtractor(FeatureExtractor):
     and any additional preprocessing you want to do.
     """
     def __init__(self, indexer: Indexer):
-        raise Exception("Must be implemented")
+        self.indexer = indexer
+
+    def extract_features(self, sentence: List[str], add_to_indexer: bool=False) -> Counter:
+        # Lowercase and remove non-alphabetic characters
+        cleaned_sentence = [re.sub(r'[^a-zA-Z]', '', word.lower()) for word in sentence if word.isalpha()]
+
+        features = Counter()
+
+        for word in cleaned_sentence:
+            # If add_to_indexer is True, add new words to the indexer; else, skip unseen words
+            word_index = self.indexer.add_and_get_index(f"Unigram={word}", add_to_indexer)
+            if word_index != -1:
+                features[word_index] += 1
+
+        return features
+
+    def get_indexer(self):
+        return self.indexer
 
 
 class BigramFeatureExtractor(FeatureExtractor):
@@ -76,8 +95,19 @@ class PerceptronClassifier(SentimentClassifier):
     superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
     modify the constructor to pass these in.
     """
-    def __init__(self):
-        raise Exception("Must be implemented")
+    def __init__(self, weights, feat_extractor: UnigramFeatureExtractor):
+        self.weights = weights
+        self.feat_extractor = feat_extractor
+
+    def predict(self, sentence: List[str]) -> int:
+        # Extract features
+        features = self.feat_extractor.extract_features(sentence, add_to_indexer=False)
+        
+        # Calculate the score (dot product of weights and features)
+        score = sum(self.weights[index] * value for index, value in features.items())
+        
+        # Predict 1 (positive) if score > 0, otherwise 0 (negative)
+        return 1 if score > 0 else 0
 
 
 class LogisticRegressionClassifier(SentimentClassifier):
@@ -86,8 +116,25 @@ class LogisticRegressionClassifier(SentimentClassifier):
     superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
     modify the constructor to pass these in.
     """
-    def __init__(self):
-        raise Exception("Must be implemented")
+    def __init__(self, weights, feat_extractor: UnigramFeatureExtractor):
+        self.weights = weights
+        self.feat_extractor = feat_extractor
+
+    def sigmoid(self, z):
+        return 1 / (1 + np.exp(-z))
+
+    def predict(self, sentence: List[str]) -> int:
+        # Extract features
+        features = self.feat_extractor.extract_features(sentence, add_to_indexer=False)
+        
+        # Calculate the score (dot product of weights and features)
+        score = sum(self.weights[index] * value for index, value in features.items())
+        
+        # Apply the sigmoid function to calculate the probability
+        probability = self.sigmoid(score)
+        
+        # Predict 1 (positive) if probability > 0.5, otherwise 0 (negative)
+        return 1 if probability >= 0.5 else 0
 
 
 def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> PerceptronClassifier:
@@ -97,7 +144,38 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     :param feat_extractor: feature extractor to use
     :return: trained PerceptronClassifier model
     """
-    raise Exception("Must be implemented")
+    num_epochs = 10
+    indexer = feat_extractor.get_indexer()
+    weights = None  # Initialize weights as None for now
+    learning_rate = 1.0  # Initial learning rate
+
+    for epoch in range(num_epochs):
+        random.shuffle(train_exs)
+        learning_rate = 1.0 / (epoch + 1)  # Decrease learning rate
+        
+        for ex in train_exs:
+            features = feat_extractor.extract_features(ex.words, add_to_indexer=True)
+            
+            # Initialize weights after the first feature extraction when we know the size of indexer
+            if weights is None:
+                weights = np.zeros(len(indexer))
+            
+            # If indexer size grows, resize the weights array
+            if len(weights) < len(indexer):
+                new_weights = np.zeros(len(indexer))
+                new_weights[:len(weights)] = weights  # Copy existing weights to the new array
+                weights = new_weights
+
+            # Calculate score and prediction
+            score = sum(weights[index] * value for index, value in features.items())
+            prediction = 1 if score > 0 else 0
+            
+            # Update weights if prediction is incorrect
+            if prediction != ex.label:
+                for index, value in features.items():
+                    weights[index] += learning_rate * value * (1 if ex.label == 1 else -1)
+    
+    return PerceptronClassifier(weights, feat_extractor)
 
 
 def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> LogisticRegressionClassifier:
@@ -107,7 +185,39 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     :param feat_extractor: feature extractor to use
     :return: trained LogisticRegressionClassifier model
     """
-    raise Exception("Must be implemented")
+    num_epochs = 10
+    indexer = feat_extractor.get_indexer()
+    learning_rate = 0.1  # You can experiment with this value
+    weights = None  # Initialize weights
+
+    for epoch in range(num_epochs):
+        random.shuffle(train_exs)  # Shuffle the training examples
+        
+        for ex in train_exs:
+            features = feat_extractor.extract_features(ex.words, add_to_indexer=True)
+
+            # Initialize weights after the first feature extraction
+            if weights is None:
+                weights = np.zeros(len(indexer))
+
+            # Ensure weights can handle new features added to the indexer
+            if len(weights) < len(indexer):
+                new_weights = np.zeros(len(indexer))
+                new_weights[:len(weights)] = weights
+                weights = new_weights
+
+            # Compute the dot product (score)
+            score = sum(weights[index] * value for index, value in features.items())
+            
+            # Apply sigmoid to get the predicted probability
+            prediction_prob = 1 / (1 + np.exp(-score))
+
+            # Compute the gradient for each feature
+            error = ex.label - prediction_prob  # Error = true label - predicted probability
+            for index, value in features.items():
+                weights[index] += learning_rate * error * value  # Gradient descent weight update
+    
+    return LogisticRegressionClassifier(weights, feat_extractor)
 
 
 def train_model(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample]) -> SentimentClassifier:
