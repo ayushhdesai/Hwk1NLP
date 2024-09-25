@@ -99,6 +99,14 @@ class PerceptronClassifier(SentimentClassifier):
         self.w = w
         self.f = f
 
+    def top_features(self, n=10):
+        top_positive_indices = np.argsort(self.w)[-n:]
+        top_negative_indices = np.argsort(self.w)[:n]
+        top_positive_features = [(self.f.indexer.get_object(i), self.w[i]) for i in top_positive_indices]
+        top_negative_features = [(self.f.indexer.get_object(i), self.w[i]) for i in top_negative_indices]
+        
+        return top_positive_features, top_negative_features
+
     # extract and predict
     def predict(self, sentence: List[str]) -> int:
         fs = self.f.get_features(sentence, add_to_indexer=False)

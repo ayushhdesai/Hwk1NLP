@@ -100,6 +100,16 @@ if __name__ == '__main__':
     evaluate(model, dev_exs)
     print("Time for training and evaluation: %.2f seconds" % (time.time() - start_time))
 
+    # if isinstance(model, PerceptronClassifier):
+    #     tp, tn = model.top_features(n=10)
+    #     print("\nTop 10 Positive Words:")
+    #     for feature, weight in tp:
+    #         print(f"{feature}: {weight}")
+        
+    #     print("\nTop 10 Negative Words:")
+    #     for feature, weight in tn:
+    #         print(f"{feature}: {weight}")
+
     # Write the test set output
     if args.run_on_test:
         test_exs_predicted = [SentimentExample(words, model.predict(words)) for words in test_exs_words_only]
