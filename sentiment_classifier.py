@@ -3,6 +3,7 @@
 import argparse
 import sys
 import time
+import matplotlib.pyplot as plt
 from models import *
 from sentiment_data import *
 from typing import List
@@ -88,6 +89,7 @@ if __name__ == '__main__':
     # Load train, dev, and test exs and index the words.
     train_exs = read_sentiment_examples(args.train_path)
     dev_exs = read_sentiment_examples(args.dev_path)
+    step_sizes = [0.01, 0.1, 0.5]
     test_exs_words_only = read_blind_sst_examples(args.blind_test_path)
     print(repr(len(train_exs)) + " / " + repr(len(dev_exs)) + " / " + repr(len(test_exs_words_only)) + " train/dev/test examples")
 
@@ -110,6 +112,41 @@ if __name__ == '__main__':
     #     for feature, weight in tn:
     #         print(f"{feature}: {weight}")
 
+    if isinstance(model, LogisticRegressionClassifierStep):
+        # Store the results for different step sizes
+        all_log_likelihoods = []
+        all_dev_accuracies = []
+
+        for step_size in step_sizes:
+            print(f"Training Logistic Regression with step size {step_size}...")
+            model, log_likelihoods, dev_accuracies = train_logistic_regression_step(train_exs, UnigramFeatureExtractor(Indexer()), dev_exs, step_size)
+            all_log_likelihoods.append(log_likelihoods)
+            all_dev_accuracies.append(dev_accuracies)
+
+        # Plotting
+        epochs = list(range(1, len(log_likelihoods) + 1))
+        plt.figure(figsize=(12, 6))
+
+        # Plot log likelihoods
+        plt.subplot(1, 2, 1)
+        for i, step_size in enumerate(step_sizes):
+            plt.plot(epochs, all_log_likelihoods[i], label=f"Step size {step_size}")
+        plt.title('Log Likelihood vs. Training Iterations')
+        plt.xlabel('Epoch')
+        plt.ylabel('Log Likelihood')
+        plt.legend()
+
+        # Plot dev accuracies
+        plt.subplot(1, 2, 2)
+        for i, step_size in enumerate(step_sizes):
+            plt.plot(epochs, all_dev_accuracies[i], label=f"Step size {step_size}")
+        plt.title('Dev Accuracy vs. Training Iterations')
+        plt.xlabel('Epoch')
+        plt.ylabel('Dev Accuracy')
+        plt.legend()
+
+        plt.tight_layout()
+        plt.show()
     # Write the test set output
     if args.run_on_test:
         test_exs_predicted = [SentimentExample(words, model.predict(words)) for words in test_exs_words_only]

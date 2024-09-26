@@ -1,6 +1,7 @@
 # models.py
 
 import random
+from sentiment_classifier import evaluate
 from sentiment_data import *
 from utils import *
 import numpy as np
@@ -133,6 +134,26 @@ class LogisticRegressionClassifier(SentimentClassifier):
         s = sum(self.w[i] * v for i, v in fs.items())
         p = self.sigmoid(s)
         return 1 if p >= 0.5 else 0 # because of the curve, check at 0.5
+    
+class LogisticRegressionClassifierStep(SentimentClassifier):
+    """
+    Implement this class -- you should at least have init() and implement the predict method from the SentimentClassifier
+    superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
+    modify the constructor to pass these in.
+    """
+    def __init__(self, w, f: UnigramFeatureExtractor):
+        self.w = w
+        self.f = f
+
+    def sigmoid(self, z):
+        return 1 / (1 + np.exp(-z))
+
+    # extract, apply sigmoid and predict
+    def predict(self, sentence: List[str]) -> int:
+        fs = self.f.get_features(sentence, add_to_indexer=False)
+        s = sum(self.w[i] * v for i, v in fs.items())
+        p = self.sigmoid(s)
+        return 1 if p >= 0.5 else 0 # because of the curve, check at 0.5
 
 
 def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> PerceptronClassifier:
@@ -173,7 +194,6 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     
     return PerceptronClassifier(weights, feat_extractor)
 
-
 def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> LogisticRegressionClassifier:
     """
     Train a logistic regression model.
@@ -212,6 +232,57 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     
     return LogisticRegressionClassifier(weights, feat_extractor)
 
+def train_logistic_regression_step(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor, dev_exs: List[SentimentExample], step_size: float) -> LogisticRegressionClassifierStep:
+    """
+    Train a logistic regression model.
+    :param train_exs: training set, List of SentimentExample objects
+    :param feat_extractor: feature extractor to use
+    :return: trained LogisticRegressionClassifier model
+    """
+    n_epochs = 12
+    i = feat_extractor.get_indexer()
+    #lr = 0.1
+    weights = None
+
+    l_likelihood = []
+    d_accuracies = []
+
+    # Looping through each epoch, randomizing training examples, extracting features, initializing/resizing weights if required,
+    # calculating prediction probabilities using sigmoid, and updating weights using gradient descent
+    for e in range(n_epochs):
+        random.shuffle(train_exs)
+        tl_likelihood = 0.0
+        
+        for x in train_exs:
+            f = feat_extractor.get_features(x.words, add_to_indexer=True)
+
+            if weights is None:
+                weights = np.zeros(len(i))
+
+            if len(weights) < len(i):
+                nw = np.zeros(len(i))
+                nw[:len(weights)] = weights 
+                weights = nw
+
+            s = sum(weights[index] * value for index, value in f.items())
+            
+            pred_prob = 1 / (1 + np.exp(-s))
+
+            if x.label == 1:
+                tl_likelihood += np.log(pred_prob)
+            else:
+                tl_likelihood += np.log(1 - pred_prob)
+
+            err = x.label - pred_prob
+            for index, value in f.items():
+                weights[index] += step_size * err * value 
+
+        l_likelihood.append(tl_likelihood)
+        d_accuracy, _ = evaluate(LogisticRegressionClassifier(weights, feat_extractor), dev_exs)
+        d_accuracies.append(d_accuracy)
+        
+    return LogisticRegressionClassifierStep(weights, feat_extractor), l_likelihood, d_accuracies
+
 
 def train_model(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample]) -> SentimentClassifier:
     """
@@ -245,6 +316,8 @@ def train_model(args, train_exs: List[SentimentExample], dev_exs: List[Sentiment
         model = train_perceptron(train_exs, feat_extractor)
     elif args.model == "LR":
         model = train_logistic_regression(train_exs, feat_extractor)
+    elif args.model == "LRS":
+        model, _, _ = train_logistic_regression_step(train_exs, feat_extractor, dev_exs, 0.1)
     else:
         raise Exception("Pass in TRIVIAL, PERCEPTRON, or LR to run the appropriate system")
     return model
