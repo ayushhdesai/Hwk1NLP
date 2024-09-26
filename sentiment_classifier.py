@@ -89,7 +89,7 @@ if __name__ == '__main__':
     # Load train, dev, and test exs and index the words.
     train_exs = read_sentiment_examples(args.train_path)
     dev_exs = read_sentiment_examples(args.dev_path)
-    step_sizes = [0.01, 0.1, 0.5]
+    step_sizes = [0.1, 0.5, 1]
     test_exs_words_only = read_blind_sst_examples(args.blind_test_path)
     print(repr(len(train_exs)) + " / " + repr(len(dev_exs)) + " / " + repr(len(test_exs_words_only)) + " train/dev/test examples")
 
@@ -147,6 +147,7 @@ if __name__ == '__main__':
 
         plt.tight_layout()
         plt.show()
+
     # Write the test set output
     if args.run_on_test:
         test_exs_predicted = [SentimentExample(words, model.predict(words)) for words in test_exs_words_only]
