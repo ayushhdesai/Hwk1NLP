@@ -1,7 +1,9 @@
 # models.py
 
+# Name: Ayush Uday Desai
+# Assignment 1 Code
+
 import random
-from sentiment_classifier import evaluate
 from sentiment_data import *
 from utils import *
 import numpy as np
@@ -81,77 +83,47 @@ class BigramFeatureExtractor(FeatureExtractor):
 
 class BetterFeatureExtractor(FeatureExtractor):
     """
-    Improved feature extractor that incorporates frequency clipping, rare word removal, and TF-IDF weighting.
+    Better feature extractor...try whatever you can think of!
     """
-    def __init__(self, indexer: Indexer, stopwords: set = None, min_word_freq: int = 2, max_word_freq: int = 5):
-        """
-        Initializes the BetterFeatureExtractor with stopwords, minimum word frequency threshold, 
-        and maximum frequency clipping threshold.
-
-        Args:
-        - indexer: Indexer object to index features.
-        - stopwords: Set of stopwords to remove.
-        - min_word_freq: Minimum frequency threshold for words to be kept.
-        - max_word_freq: Maximum frequency threshold for clipping frequent words.
-        """
+    def __init__(self, indexer: Indexer):
         self.indexer = indexer
-        self.stopwords = stopwords if stopwords is not None else set()
-        self.min_word_freq = min_word_freq
-        self.max_word_freq = max_word_freq
-        self.global_word_counts = Counter()  # To track global word frequencies for filtering
+        self.stopwords = set(['the', 'is', 'in', 'and', 'to', 'a', 'of', 'that', 'on', 'for', 'with', 'as', 'it', 'at', 'by', 'this', 'from'])
+        self.mwc = 2
+        self.wdf = Counter()
+        self.t_docs = 0
 
-    def get_features(self, sentence: List[str], add_to_indexer: bool = False) -> Counter:
-        # Preprocess the sentence: lowercase, remove non-alphabetic characters, and discard stopwords
-        cleaned_sentence = [
-            word.lower() for word in sentence
-            if word.isalpha() and word.lower() not in self.stopwords
-        ]
+    def get_features(self, sentence: List[str], add_to_indexer: bool=False) -> Counter:
+        # Cleaning sentence by lowercasing, removing punctuation, and filtering stopwords
+        c_sen = [word.lower() for word in sentence if word.isalpha() and word.lower() not in self.stopwords]
         
-        # Count word frequencies (unigrams)
-        unigram_counts = Counter(cleaned_sentence)
+        # Updating word frequency for tf-idf calculation
+        if add_to_indexer:
+            self.t_docs += 1
+            unique_words = set(c_sen)
+            for word in unique_words:
+                self.wdf[word] += 1
 
-        # Apply word frequency clipping
-        for word in list(unigram_counts):
-            if unigram_counts[word] > self.max_word_freq:
-                unigram_counts[word] = self.max_word_freq
+        # Calculating tf-idf based on the frequency of words in the sentence
+        f = Counter()
+        total_words = len(c_sen)
+        for word in c_sen:
+            # Only considering words that are not too rare
+            if self.wdf[word] >= self.mwc:
+                tf = c_sen.count(word) / total_words 
+                
+                if self.wdf[word] > 0:
+                    idf = np.log(self.t_docs / (1 + self.wdf[word]))
+                    tfidf = tf * idf
 
-        # Remove rare words (frequency less than min_word_freq)
-        for word in list(unigram_counts):
-            if self.global_word_counts[word] < self.min_word_freq:
-                del unigram_counts[word]
+                    wi = self.indexer.add_and_get_index(f"Better={word}", add_to_indexer)
+                    if wi != -1:
+                        f[wi] = tfidf
 
-        # Combine unigram and bigram counts (optional)
-        bigram_counts = Counter()
-        for i in range(len(cleaned_sentence) - 1):
-            bigram = f"{cleaned_sentence[i]}+{cleaned_sentence[i + 1]}"
-            bigram_counts[bigram] += 1
-        
-        combined_counts = unigram_counts + bigram_counts
-
-        # TF-IDF weighting (simplified for speed)
-        total_count = sum(combined_counts.values())
-        tf_idf_features = Counter()
-        for feature, count in combined_counts.items():
-            tf_idf_features[self.indexer.add_and_get_index(feature, add_to_indexer)] = (count / total_count)
-
-        return tf_idf_features
-
-    def update_global_word_counts(self, corpus: List[List[str]]):
-        """
-        Updates global word counts based on the given corpus.
-
-        Args:
-        - corpus: A list of sentences (each sentence is a list of words).
-        """
-        for sentence in corpus:
-            cleaned_sentence = [
-                word.lower() for word in sentence
-                if word.isalpha() and word.lower() not in self.stopwords
-            ]
-            self.global_word_counts.update(cleaned_sentence)
+        return f
 
     def get_indexer(self):
         return self.indexer
+
 
 class SentimentClassifier(object):
     """
@@ -183,6 +155,7 @@ class PerceptronClassifier(SentimentClassifier):
         self.w = w
         self.f = f
 
+    # Function to get top features
     def top_features(self, n=10):
         top_positive_indices = np.argsort(self.w)[-n:]
         top_negative_indices = np.argsort(self.w)[:n]
@@ -218,25 +191,25 @@ class LogisticRegressionClassifier(SentimentClassifier):
         p = self.sigmoid(s)
         return 1 if p >= 0.5 else 0 # because of the curve, check at 0.5
     
-class LogisticRegressionClassifierStep(SentimentClassifier):
-    """
-    Implement this class -- you should at least have init() and implement the predict method from the SentimentClassifier
-    superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
-    modify the constructor to pass these in.
-    """
-    def __init__(self, w, f: UnigramFeatureExtractor):
-        self.w = w
-        self.f = f
+# class LogisticRegressionClassifierStep(SentimentClassifier):
+#     """
+#     Implement this class -- you should at least have init() and implement the predict method from the SentimentClassifier
+#     superclass. Hint: you'll probably need this class to wrap both the weight vector and featurizer -- feel free to
+#     modify the constructor to pass these in.
+#     """
+#     def __init__(self, w, f: UnigramFeatureExtractor):
+#         self.w = w
+#         self.f = f
 
-    def sigmoid(self, z):
-        return 1 / (1 + np.exp(-z))
+#     def sigmoid(self, z):
+#         return 1 / (1 + np.exp(-z))
 
-    # extract, apply sigmoid and predict
-    def predict(self, sentence: List[str]) -> int:
-        fs = self.f.get_features(sentence, add_to_indexer=False)
-        s = sum(self.w[i] * v for i, v in fs.items())
-        p = self.sigmoid(s)
-        return 1 if p >= 0.5 else 0 # because of the curve, check at 0.5
+#     # extract, apply sigmoid and predict
+#     def predict(self, sentence: List[str]) -> int:
+#         fs = self.f.get_features(sentence, add_to_indexer=False)
+#         s = sum(self.w[i] * v for i, v in fs.items())
+#         p = self.sigmoid(s)
+#         return 1 if p >= 0.5 else 0
 
 
 def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor) -> PerceptronClassifier:
@@ -249,14 +222,14 @@ def train_perceptron(train_exs: List[SentimentExample], feat_extractor: FeatureE
     n_epochs = 15
     i = feat_extractor.get_indexer()
     weights = None
-    lr = 0.2
+    lr = 0.15
     d = 0.9
 
     # Looping through each epoch, randomizing training examples, adjusting the learning rate, extracting features, 
     # initializing/resizing weights if required, making predictions, and updating weights when predictions are incorrect
     for e in range(n_epochs):
         random.shuffle(train_exs) # randomising at every epoch
-        lr = (lr * (d**e))
+        lr = (lr * (d**e)) #exponential lr
         
         for x in train_exs:
             f = feat_extractor.get_features(x.words, add_to_indexer=True)
@@ -295,7 +268,7 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     # calculating prediction probabilities using sigmoid, and updating weights using gradient descent
     for e in range(n_epochs):
         random.shuffle(train_exs)
-        lr = (lr * (d**e))
+        lr = (lr * (d**e)) #exponential lr
         
         for x in train_exs:
             f = feat_extractor.get_features(x.words, add_to_indexer=True)
@@ -310,7 +283,7 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
 
             s = sum(weights[index] * value for index, value in f.items())
             
-            pred_prob = 1 / (1 + np.exp(-s))
+            pred_prob = 1 / (1 + np.exp(-s)) #sigmoid function
 
             err = x.label - pred_prob
             for index, value in f.items():
@@ -318,55 +291,55 @@ def train_logistic_regression(train_exs: List[SentimentExample], feat_extractor:
     
     return LogisticRegressionClassifier(weights, feat_extractor)
 
-def train_logistic_regression_step(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor, dev_exs: List[SentimentExample], step_size: float) -> LogisticRegressionClassifierStep:
-    """
-    Train a logistic regression model.
-    :param train_exs: training set, List of SentimentExample objects
-    :param feat_extractor: feature extractor to use
-    :return: trained LogisticRegressionClassifier model
-    """
-    n_epochs = 15
-    i = feat_extractor.get_indexer()
-    weights = None
+# def train_logistic_regression_step(train_exs: List[SentimentExample], feat_extractor: FeatureExtractor, dev_exs: List[SentimentExample], step_size: float) -> LogisticRegressionClassifierStep:
+#     """
+#     Train a logistic regression model.
+#     :param train_exs: training set, List of SentimentExample objects
+#     :param feat_extractor: feature extractor to use
+#     :return: trained LogisticRegressionClassifier model
+#     """
+#     n_epochs = 15
+#     i = feat_extractor.get_indexer()
+#     weights = None
 
-    l_likelihood = []
-    d_accuracies = []
+#     l_likelihood = []
+#     d_accuracies = []
 
-    # Looping through each epoch, randomizing training examples, extracting features, initializing/resizing weights if required,
-    # calculating prediction probabilities using sigmoid, and updating weights using gradient descent
-    for e in range(n_epochs):
-        random.shuffle(train_exs)
-        tl_likelihood = 0.0
+#     # Looping through each epoch, randomizing training examples, extracting features, initializing/resizing weights if required,
+#     # calculating prediction probabilities using sigmoid, and updating weights using gradient descent
+#     for e in range(n_epochs):
+#         random.shuffle(train_exs)
+#         tl_likelihood = 0.0
         
-        for x in train_exs:
-            f = feat_extractor.get_features(x.words, add_to_indexer=True)
+#         for x in train_exs:
+#             f = feat_extractor.get_features(x.words, add_to_indexer=True)
 
-            if weights is None:
-                weights = np.zeros(len(i))
+#             if weights is None:
+#                 weights = np.zeros(len(i))
 
-            if len(weights) < len(i):
-                nw = np.zeros(len(i))
-                nw[:len(weights)] = weights 
-                weights = nw
+#             if len(weights) < len(i):
+#                 nw = np.zeros(len(i))
+#                 nw[:len(weights)] = weights 
+#                 weights = nw
 
-            s = sum(weights[index] * value for index, value in f.items())
+#             s = sum(weights[index] * value for index, value in f.items())
             
-            pred_prob = 1 / (1 + np.exp(-s))
+#             pred_prob = 1 / (1 + np.exp(-s))
 
-            if x.label == 1:
-                tl_likelihood += np.log(pred_prob)
-            else:
-                tl_likelihood += np.log(1 - pred_prob)
+#             if x.label == 1:
+#                 tl_likelihood += np.log(pred_prob)
+#             else:
+#                 tl_likelihood += np.log(1 - pred_prob)
 
-            err = x.label - pred_prob
-            for index, value in f.items():
-                weights[index] += step_size * err * value 
+#             err = x.label - pred_prob
+#             for index, value in f.items():
+#                 weights[index] += step_size * err * value 
 
-        l_likelihood.append(tl_likelihood)
-        d_accuracy, _ = evaluate(LogisticRegressionClassifierStep(weights, feat_extractor), dev_exs)
-        d_accuracies.append(d_accuracy)
+#         l_likelihood.append(tl_likelihood)
+#         d_accuracy, _ = evaluate(LogisticRegressionClassifierStep(weights, feat_extractor), dev_exs)
+#         d_accuracies.append(d_accuracy)
         
-    return LogisticRegressionClassifierStep(weights, feat_extractor), l_likelihood, d_accuracies
+#     return LogisticRegressionClassifierStep(weights, feat_extractor), l_likelihood, d_accuracies
 
 
 def train_model(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample]) -> SentimentClassifier:
@@ -401,8 +374,8 @@ def train_model(args, train_exs: List[SentimentExample], dev_exs: List[Sentiment
         model = train_perceptron(train_exs, feat_extractor)
     elif args.model == "LR":
         model = train_logistic_regression(train_exs, feat_extractor)
-    elif args.model == "LRS":
-        model, _, _ = train_logistic_regression_step(train_exs, feat_extractor, dev_exs, 0.1)
+    # elif args.model == "LRS":
+    #     model, _, _ = train_logistic_regression_step(train_exs, feat_extractor, dev_exs, 0.1)
     else:
         raise Exception("Pass in TRIVIAL, PERCEPTRON, or LR to run the appropriate system")
     return model

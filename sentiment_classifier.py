@@ -112,41 +112,41 @@ if __name__ == '__main__':
     #     for feature, weight in tn:
     #         print(f"{feature}: {weight}")
 
-    if isinstance(model, LogisticRegressionClassifierStep):
-        # Store the results for different step sizes
-        all_log_likelihoods = []
-        all_dev_accuracies = []
+    # if isinstance(model, LogisticRegressionClassifierStep):
+    #     # Store the results for different step sizes
+    #     all_log_likelihoods = []
+    #     all_dev_accuracies = []
 
-        for step_size in step_sizes:
-            print(f"Training Logistic Regression with step size {step_size}...")
-            model, log_likelihoods, dev_accuracies = train_logistic_regression_step(train_exs, UnigramFeatureExtractor(Indexer()), dev_exs, step_size)
-            all_log_likelihoods.append(log_likelihoods)
-            all_dev_accuracies.append(dev_accuracies)
+    #     for step_size in step_sizes:
+    #         print(f"Training Logistic Regression with step size {step_size}...")
+    #         model, log_likelihoods, dev_accuracies = train_logistic_regression_step(train_exs, UnigramFeatureExtractor(Indexer()), dev_exs, step_size)
+    #         all_log_likelihoods.append(log_likelihoods)
+    #         all_dev_accuracies.append(dev_accuracies)
 
-        # Plotting
-        epochs = list(range(1, len(log_likelihoods) + 1))
-        plt.figure(figsize=(12, 6))
+    #     # Plotting
+    #     epochs = list(range(1, len(log_likelihoods) + 1))
+    #     plt.figure(figsize=(12, 6))
 
-        # Plot log likelihoods
-        plt.subplot(1, 2, 1)
-        for i, step_size in enumerate(step_sizes):
-            plt.plot(epochs, all_log_likelihoods[i], label=f"Step size {step_size}")
-        plt.title('Log Likelihood vs. Training Iterations')
-        plt.xlabel('Epoch')
-        plt.ylabel('Log Likelihood')
-        plt.legend()
+    #     # Plot log likelihoods
+    #     plt.subplot(1, 2, 1)
+    #     for i, step_size in enumerate(step_sizes):
+    #         plt.plot(epochs, all_log_likelihoods[i], label=f"Step size {step_size}")
+    #     plt.title('Log Likelihood vs. Training Iterations')
+    #     plt.xlabel('Epoch')
+    #     plt.ylabel('Log Likelihood')
+    #     plt.legend()
 
-        # Plot dev accuracies
-        plt.subplot(1, 2, 2)
-        for i, step_size in enumerate(step_sizes):
-            plt.plot(epochs, all_dev_accuracies[i], label=f"Step size {step_size}")
-        plt.title('Dev Accuracy vs. Training Iterations')
-        plt.xlabel('Epoch')
-        plt.ylabel('Dev Accuracy')
-        plt.legend()
+    #     # Plot dev accuracies
+    #     plt.subplot(1, 2, 2)
+    #     for i, step_size in enumerate(step_sizes):
+    #         plt.plot(epochs, all_dev_accuracies[i], label=f"Step size {step_size}")
+    #     plt.title('Dev Accuracy vs. Training Iterations')
+    #     plt.xlabel('Epoch')
+    #     plt.ylabel('Dev Accuracy')
+    #     plt.legend()
 
-        plt.tight_layout()
-        plt.show()
+    #     plt.tight_layout()
+    #     plt.show()
 
     # Write the test set output
     if args.run_on_test:
